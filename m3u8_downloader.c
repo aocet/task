@@ -77,8 +77,8 @@ void convert_to_lines(char *memory, char **result) {
     int i = 0;
     result[i] = strtok(memory, "\n");
     while (result[i] != NULL) {
-        result[i] = strtok(NULL, "\n");
         i++;
+        result[i] = strtok(NULL, "\n");
     }
 }
 
@@ -164,9 +164,11 @@ void find_playlists(char **result, int N, struct Playlist **head, char *url) {
 struct Playlist *find_target_playlist(struct Playlist *head) {
     struct Playlist *current = head;
     struct Playlist *target_playlist = head;
-
     while (current != NULL) {
         if (current->resolution >= target_playlist->resolution) {
+            if(target_playlist != current) {
+                free(target_playlist);
+            }
             target_playlist = current;
         }
         current = current->next;
@@ -261,9 +263,6 @@ void download_files(char **playlist, char *output_filename, char *url) {
                 free(chunk.memory);
             }
             i++;
-            if (i > 20) {
-                break;
-            }
         }
         fclose(f);
     }
@@ -344,6 +343,8 @@ int main(int argc, char **argv) {
     struct Playlist *target_playlist = read_master_playlist(input_url);
     if (target_playlist != NULL) {
         read_target_playlist(target_playlist->url, output_filename);
+    } else {
+        printf("Playlist couldn't found\n");
     }
     return 0;
 }
