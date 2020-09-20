@@ -156,6 +156,7 @@ void find_playlists(char **result, int N, struct Playlist **head, char *url) {
 
         }
     }
+    free(result);
 }
 
 /*
@@ -166,7 +167,7 @@ struct Playlist *find_target_playlist(struct Playlist *head) {
     struct Playlist *target_playlist = head;
     while (current != NULL) {
         if (current->resolution >= target_playlist->resolution) {
-            if(target_playlist != current) {
+            if (target_playlist != current) {
                 free(target_playlist);
             }
             target_playlist = current;
@@ -266,6 +267,7 @@ void download_files(char **playlist, char *output_filename, char *url) {
         }
         fclose(f);
     }
+    free(playlist);
 }
 
 struct Playlist *read_master_playlist(char *input_url) {
