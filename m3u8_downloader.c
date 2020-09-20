@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <curl/curl.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <string.h>
 
 struct MemoryStruct {
@@ -8,25 +9,27 @@ struct MemoryStruct {
     size_t size;
 };
 
-struct Playlist{
-    char* url;
-    char* name;
+struct Playlist {
+    char *url;
+    char *name;
     int resolution;
-    struct Playlist* next;
+    struct Playlist *next;
 };
 
+extern int errno;
+
 static size_t
+
 /*
  * This method writes content of packet to the memory
  * I took it from examples of curl
  */
-WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
-{
+WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp) {
     size_t realsize = size * nmemb;
-    struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+    struct MemoryStruct *mem = (struct MemoryStruct *) userp;
 
     char *ptr = realloc(mem->memory, mem->size + realsize + 1);
-    if(ptr == NULL) {
+    if (ptr == NULL) {
         /* out of memory! */
         printf("not enough memory (realloc returned NULL)\n");
         return 0;
@@ -41,8 +44,7 @@ WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 }
 
 
-int prefix(const char *pre, const char *str)
-{
+int StartsWith(const char *pre, const char *str) {
     return strncmp(pre, str, strlen(pre)) == 0;
 }
 
@@ -50,69 +52,70 @@ int prefix(const char *pre, const char *str)
  * This method checks that if a string ends with a specific suffix.
  * I got it from stackoverflow
  */
-int EndsWith(const char *str, const char *suffix)
-{
+int EndsWith(const char *str, const char *suffix) {
     if (!str || !suffix)
         return 0;
     size_t lenstr = strlen(str);
     size_t lensuffix = strlen(suffix);
-    if (lensuffix >  lenstr)
+    if (lensuffix > lenstr)
         return 0;
     return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
 
-int line_count(char* memory, int size){
+//returns line count of playlist
+int line_count(char *memory, int size) {
     int result = 0;
-    for(int i=0; i < size; i++){
-        if(memory[i] == '\n'){
+    for (int i = 0; i < size; i++) {
+        if (memory[i] == '\n') {
             result++;
         }
     }
     return result;
 }
 
-void convert_to_lines(char* memory, char** result){
-    int i=0;
+void convert_to_lines(char *memory, char **result) {
+    int i = 0;
     result[i] = strtok(memory, "\n");
-    while(result[i] != NULL){
-        printf("+%s\n", result[i++]);
+    while (result[i] != NULL) {
         result[i] = strtok(NULL, "\n");
+        i++;
     }
 }
 
 //this method deletes last word of url with replacing end of char ar.
-void delete_end_of_url(char* url){
+void delete_end_of_url(char *url) {
     int i = strlen(url);
-    while(i > 0) {
-        if(url[i] == '/') {
-            url[i+1] ='\0';
+    while (i > 0) {
+        if (url[i] == '/') {
+            url[i + 1] = '\0';
             return;
         }
         i--;
     }
 }
 
-void create_url_with_name(char** target_url, char* url, char* name){
+void create_url_with_name(char **target_url, char *url, char *name) {
     int url_length = strlen(url) + strlen(name);
-    *target_url = (char*) malloc(sizeof(char ) * url_length);
+    *target_url = (char *) malloc(sizeof(char) * url_length);
     strcpy(*target_url, url);
     strcat(*target_url, name);
 }
 
 /* This methods takes a line and returns resolution if this line is belongs to a playlist description
  * else it returns -1
+ * example line: #EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=1322303,BANDWIDTH=1326366,CODECS="avc1.64001e,ec-3",RESOLUTION=768x432,FRAME-RATE=30.000,CLOSED-CAPTIONS="cc1",AUDIO="aud3",SUBTITLES="sub1"
  */
-int get_resolution(char* line){
-    char delim[] =":";
-    char* line_definer = strtok(line, delim);
-    if(strcmp(line_definer, "#EXT-X-STREAM-INF") == 0) {
-        while(line_definer != NULL){
-            if(prefix("RESOLUTION=", line_definer)){
+int get_resolution(char *line) {
+    char delim[] = ":";
+    char *line_definer = strtok(line, delim);
+    if (strcmp(line_definer, "#EXT-X-STREAM-INF") == 0) {
+        while (line_definer != NULL) {
+            if (StartsWith("RESOLUTION=", line_definer)) {
                 char *res = strtok(line_definer, "=");
                 res = strtok(NULL, "x");
-                int r1= atoi(res);
+                int r1 = atoi(res);
                 res = strtok(NULL, "x");
-                int r2= atoi(res);
+                int r2 = atoi(res);
                 return r1 * r2;
             }
             line_definer = strtok(NULL, ",");
@@ -123,31 +126,46 @@ int get_resolution(char* line){
     return -1;
 }
 
-void find_playlists(char** result, int N, struct Playlist** head, char* url){
+/*
+ * This method extracts playlists from master playlist.
+ */
+void find_playlists(char **result, int N, struct Playlist **head, char *url) {
     int i;
     delete_end_of_url(url);
 
-    for(i=0; i<N; i++){
-        if(result[i] == NULL) {
+    for (i = 0; i < N - 1; i++) {
+        if (result[i] == NULL) {
             break;
         }
         int res = get_resolution(result[i]);
-        if(res != -1){
-            struct Playlist* temp = (struct Playlist*) malloc(sizeof(struct Playlist));
-            temp->name = result[i+1];
-            temp->resolution = res;
-            create_url_with_name(&temp->url, url, temp->name);
-            temp->next = *head;
-            *head = temp;
+        if (res != -1) {
+            struct Playlist *temp = (struct Playlist *) malloc(sizeof(struct Playlist));
+
+            if (temp == NULL) {
+                int errnum = errno;
+                fprintf(stderr, "Value of errno: %d\n", errno);
+                perror("Error printed by perror");
+                fprintf(stderr, "Error allocating memory for playlist: %s\n", strerror(errnum));
+            } else {
+                temp->name = result[i + 1];
+                temp->resolution = res;
+                create_url_with_name(&temp->url, url, temp->name);
+                temp->next = *head;
+                *head = temp;
+            }
+
         }
     }
 }
 
-struct Playlist* find_target_playlist(struct Playlist* head){
-    struct Playlist* current = head;
-    struct Playlist* target_playlist = head;
+/*
+ * This method finds the first variant playlist with highest resolution in master playlist
+ */
+struct Playlist *find_target_playlist(struct Playlist *head) {
+    struct Playlist *current = head;
+    struct Playlist *target_playlist = head;
 
-    while(current != NULL){
+    while (current != NULL) {
         if (current->resolution >= target_playlist->resolution) {
             target_playlist = current;
         }
@@ -161,12 +179,20 @@ struct Playlist* find_target_playlist(struct Playlist* head){
  * This method gets pocket from given url.
  * I copied this method from examples of curl and modified.
  */
-void get_with_curl(char* input_url, struct MemoryStruct* chunk){
+void get_with_curl(char *input_url, struct MemoryStruct *chunk) {
     printf("%s\n", input_url);
     CURL *curl_handle;
     CURLcode res;
 
     chunk->memory = malloc(1);  /* will be grown as needed by the realloc above */
+
+    if (chunk->memory == NULL) {
+        int errnum = errno;
+        fprintf(stderr, "Value of errno: %d\n", errno);
+        perror("Error printed by perror");
+        fprintf(stderr, "Error allocating memory for playlist: %s\n", strerror(errnum));
+    }
+
     chunk->size = 0;    /* no data at this point */
 
     curl_global_init(CURL_GLOBAL_ALL);
@@ -187,11 +213,10 @@ void get_with_curl(char* input_url, struct MemoryStruct* chunk){
     res = curl_easy_perform(curl_handle);
 
     /* check for errors */
-    if(res != CURLE_OK) {
+    if (res != CURLE_OK) {
         fprintf(stderr, "curl_easy_perform() failed: %s\n",
                 curl_easy_strerror(res));
-    }
-    else {
+    } else {
         /*
          * Now, our chunk.memory points to a memory block that is chunk.size
          * bytes big and contains the remote file.
@@ -199,7 +224,7 @@ void get_with_curl(char* input_url, struct MemoryStruct* chunk){
          * Do something nice with it!
          */
 
-        printf("%lu bytes retrieved\n", (unsigned long)chunk->size);
+        printf("%lu bytes retrieved\n", (unsigned long) chunk->size);
     }
     /* cleanup curl stuff */
     curl_easy_cleanup(curl_handle);
@@ -211,66 +236,114 @@ void get_with_curl(char* input_url, struct MemoryStruct* chunk){
  * After getting last target this methods gets all pockets and writes them to a single file
  * For this assignment I assumed all files will .ts files and files are ordered in playlist.
  */
-void download_files(char** playlist, char* output_filename, char* url){
-    int i=0;
+void download_files(char **playlist, char *output_filename, char *url) {
+    int i = 0;
     FILE *f;
     f = fopen(output_filename, "a");
-    delete_end_of_url(url);
 
-    while(playlist[i] != NULL) {
-        if(EndsWith(playlist[i], ".ts")) {
-            struct MemoryStruct chunk;
-            char* target_url;
-            create_url_with_name(&target_url, url, playlist[i]);
-            get_with_curl(target_url, &chunk);
+    if (f == NULL) {
+        int errnum = errno;
+        fprintf(stderr, "Value of errno: %d\n", errno);
+        perror("Error printed by perror");
+        fprintf(stderr, "Error opening file: %s\n", strerror(errnum));
+    } else {
+        delete_end_of_url(url);
+        while (playlist[i] != NULL) {
+            if (EndsWith(playlist[i], ".ts")) {
+                struct MemoryStruct chunk;
+                char *target_url;
+                create_url_with_name(&target_url, url, playlist[i]);
+                get_with_curl(target_url, &chunk);
 
-            for(int i=0;i<chunk.size; i++){
-                fwrite(&(chunk.memory[i]),1, sizeof(chunk.memory[i]), f);
+                for (int i = 0; i < chunk.size; i++) {
+                    fwrite(&(chunk.memory[i]), 1, sizeof(chunk.memory[i]), f);
+                }
+                free(chunk.memory);
             }
-            free(chunk.memory);
+            i++;
+            if (i > 20) {
+                break;
+            }
         }
-        i++;
-        if(i > 20){
-            break;
-        }
+        fclose(f);
     }
-    fclose(f);
 }
 
-struct Playlist* read_master_playlist(char* input_url){
+struct Playlist *read_master_playlist(char *input_url) {
     struct MemoryStruct chunk;
-    struct Playlist* playlist_head = NULL;
+    struct Playlist *playlist_head = NULL;
 
     get_with_curl(input_url, &chunk);
+    if (chunk.size == 0) {
+        printf("Couldn't read anything from url\n");
+        return NULL;
+    } else {
+        int N = line_count(chunk.memory, chunk.size);
+        char **master_playlist = (char **) malloc(sizeof(char *) * N);
 
-    int N = line_count(chunk.memory, chunk.size);
-    char** master_playlist = (char **) malloc(sizeof(char *) * N);
+        if (master_playlist == NULL) {
+            int errnum = errno;
+            fprintf(stderr, "Value of errno: %d\n", errno);
+            perror("Error printed by perror");
+            fprintf(stderr, "Error allocating memory for master playlist: %s\n", strerror(errnum));
+        }
 
-    convert_to_lines(chunk.memory, master_playlist);
-    find_playlists(master_playlist, N, &playlist_head, input_url);
-    free(chunk.memory);
+        convert_to_lines(chunk.memory, master_playlist);
+        find_playlists(master_playlist, N, &playlist_head, input_url);
+        free(chunk.memory);
 
-    return find_target_playlist(playlist_head);
+        return find_target_playlist(playlist_head);
+    }
 }
 
-void read_target_playlist(char* url, char* output_filename) {
+void read_target_playlist(char *url, char *output_filename) {
     struct MemoryStruct chunk;
     get_with_curl(url, &chunk);
 
     int N = line_count(chunk.memory, chunk.size);
-    char** playlist = (char **) malloc(sizeof(char *) * N);
+    char **playlist = (char **) malloc(sizeof(char *) * N);
+    if (playlist == NULL) {
+        int errnum = errno;
+        fprintf(stderr, "Value of errno: %d\n", errno);
+        perror("Error printed by perror");
+        fprintf(stderr, "Error allocating memory for playlist: %s\n", strerror(errnum));
+    }
     convert_to_lines(chunk.memory, playlist);
     download_files(playlist, output_filename, url);
 }
-int main(int argc, char **argv) {
-    if (argc != 3) {
-        printf("Please give arguments correctly\n");
-        return 1;
-    }
-    char *input_url = argv[1];
-    char *output_filename = argv[2];
 
-    struct Playlist* target_playlist = read_master_playlist(input_url);
-    read_target_playlist(target_playlist->url, output_filename);
+void validate_arguments(int argc, char **argv, char **input_url, char **output_filename) {
+    if (argc < 3) {
+        *input_url = (char *) malloc(sizeof(char) * 1024);
+        *output_filename = (char *) malloc(sizeof(char) * 256);
+
+        if (input_url == NULL || output_filename == NULL) {
+            int errnum = errno;
+            fprintf(stderr, "Value of errno: %d\n", errno);
+            perror("Error printed by perror");
+            fprintf(stderr, "Error allocating memory for arguments: %s\n", strerror(errnum));
+        } else {
+            printf("Please give link and output file correctly\n");
+            printf("Please provide the master playlist's url:\n");
+            scanf("%s", *input_url);
+            printf("Please provide output file name:\n");
+            scanf("%s", *output_filename);
+        }
+    } else {
+        *input_url = argv[1];
+        *output_filename = argv[2];
+    }
+
+}
+
+int main(int argc, char **argv) {
+    char *input_url;
+    char *output_filename;
+    validate_arguments(argc, argv, &input_url, &output_filename);
+
+    struct Playlist *target_playlist = read_master_playlist(input_url);
+    if (target_playlist != NULL) {
+        read_target_playlist(target_playlist->url, output_filename);
+    }
     return 0;
 }
