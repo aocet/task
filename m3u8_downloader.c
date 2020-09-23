@@ -318,9 +318,13 @@ void read_target_playlist(char *url, char *output_filename) {
 }
 
 void validate_arguments(int argc, char **argv, char **input_url, char **output_filename) {
+    char ch;
+    int index = 0;
+    int url_length = 2000; // maximum url which supported by browsers
+    int filename_length = 255; // maximum filename length is 255 byte at linux
     if (argc < 3) {
-        *input_url = (char *) malloc(sizeof(char) * 1024);    // 1024 crash
-        *output_filename = (char *) malloc(sizeof(char) * 256);  // check os filename
+        *input_url = (char *) malloc(sizeof(char) * url_length);
+        *output_filename = (char *) malloc(sizeof(char) * filename_length);
 
         if (input_url == NULL || output_filename == NULL) {
             int errnum = errno;
@@ -330,11 +334,16 @@ void validate_arguments(int argc, char **argv, char **input_url, char **output_f
         } else {
             printf("Please give link and output file correctly\n");
             printf("Please provide the master playlist's url:\n");
-           // do while
-            scanf("%s", *input_url);
-            // check url,
+            while((ch=getc(stdin)) &&  ch != '\n' && ch != ' ') {
+                if(index == url_length) {
+                    url_length *= 2;
+                    *input_url = realloc(*input_url, sizeof(char)* url_length);
+                }
+                *input_url[index++] = ch;
+            }
+
             printf("Please provide output file name:\n");
-            scanf("%s", *output_filename);
+            scanf("%255s", *output_filename);
         }
     } else {
         *input_url = argv[1];
