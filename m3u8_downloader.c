@@ -177,7 +177,6 @@ void find_playlists(char **result, int N, struct Playlist **head, char *url) {
 
         }
     }
-    free(result);
 }
 
 /*
@@ -292,7 +291,6 @@ int download_files(char **playlist, char *output_filename, char *url) {
         }
         fclose(f);
     }
-    free(playlist);
     return SUCCESS;
 }
 
@@ -320,7 +318,7 @@ struct Playlist *read_master_playlist(char *input_url) {
         convert_to_lines(chunk.memory, master_playlist, N);
         find_playlists(master_playlist, N, &playlist_head, input_url);
         free(chunk.memory);
-
+        free(master_playlist);
         return find_target_playlist(playlist_head);
     }
 }
@@ -342,8 +340,10 @@ int read_target_playlist(char *url, char *output_filename) {
     }
     convert_to_lines(chunk.memory, playlist, N);
     if (!download_files(playlist, output_filename, url)) {
+        free(playlist);
         return FAILURE;
     }
+    free(playlist);
     return SUCCESS;
 }
 
