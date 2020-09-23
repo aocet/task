@@ -65,11 +65,18 @@ int EndsWith(const char *str, const char *suffix) {
 //returns line count of playlist
 int line_count(char *memory, int size) {
     int result = 0;
+   // if(size == 0){
+
+    //}
     for (int i = 0; i < size; i++) {
         if (memory[i] == '\n') {
             result++;
         }
     }
+    if(memory[size-1] != '\n'){
+        result++;
+    }
+
     return result;
 }
 
@@ -167,9 +174,6 @@ struct Playlist *find_target_playlist(struct Playlist *head) {
     struct Playlist *target_playlist = head;
     while (current != NULL) {
         if (current->resolution >= target_playlist->resolution) {
-            if (target_playlist != current) {
-                free(target_playlist);
-            }
             target_playlist = current;
         }
         current = current->next;
@@ -315,8 +319,8 @@ void read_target_playlist(char *url, char *output_filename) {
 
 void validate_arguments(int argc, char **argv, char **input_url, char **output_filename) {
     if (argc < 3) {
-        *input_url = (char *) malloc(sizeof(char) * 1024);
-        *output_filename = (char *) malloc(sizeof(char) * 256);
+        *input_url = (char *) malloc(sizeof(char) * 1024);    // 1024 crash
+        *output_filename = (char *) malloc(sizeof(char) * 256);  // check os filename
 
         if (input_url == NULL || output_filename == NULL) {
             int errnum = errno;
@@ -326,7 +330,9 @@ void validate_arguments(int argc, char **argv, char **input_url, char **output_f
         } else {
             printf("Please give link and output file correctly\n");
             printf("Please provide the master playlist's url:\n");
+           // do while
             scanf("%s", *input_url);
+            // check url,
             printf("Please provide output file name:\n");
             scanf("%s", *output_filename);
         }
